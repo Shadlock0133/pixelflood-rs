@@ -27,9 +27,9 @@ impl FromStr for Color {
         } else if s.len() == 8 {
             // rrggbbaa -> aarrggbb
             u32::from_str_radix(s, 16)
-                .map(|c| {
-                    let [r, g, b, a] = u32::to_be_bytes(c);
-                    u32::from_be_bytes([a, r, g, b])
+                .map(|color| {
+                    let [r, g, b, alpha] = u32::to_be_bytes(color);
+                    u32::from_be_bytes([alpha, r, g, b])
                 })
                 .map(Color)
                 .map_err(|_| ParseColorError::new(s))
