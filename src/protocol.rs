@@ -94,15 +94,19 @@ fn parse_px(s: &str) -> Option<(Pos, Option<Color>)> {
     Some(((x, y), color))
 }
 
-#[test]
-fn test_px() {
-    let tests = [
-        ("PX 1 2 112233", Some(((1usize, 2usize), Some(Color(0x112233u32))))),
-        ("PX 1 2 11223344", Some(((1usize, 2usize), Some(Color(0x44112233u32))))),
-        ("PX 1 2", Some(((1usize, 2usize), None))),
-        ("PX 1", None),
-    ];
-    for (msg, exp) in tests.iter() {
-        assert_eq!(&parse_px(msg), exp, "msg: {}",  msg);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_px() {
+        let tests = [
+            ("PX 1 2 112233", Some(((1usize, 2usize), Some(Color(0xff112233u32))))),
+            ("PX 1 2 11223344", Some(((1usize, 2usize), Some(Color(0x44112233u32))))),
+            ("PX 1 2", Some(((1usize, 2usize), None))),
+            ("PX 1", None),
+        ];
+        for (msg, exp) in tests.iter() {
+            assert_eq!(&parse_px(msg), exp, "msg: {}",  msg);
+        }
     }
 }
