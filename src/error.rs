@@ -1,6 +1,6 @@
+use crate::Pos;
 use std::io;
 use thiserror::Error;
-use crate::Pos;
 
 #[derive(Debug, Error)]
 pub enum MyError {

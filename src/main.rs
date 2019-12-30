@@ -9,11 +9,11 @@ use tokio::{
     time::timeout,
 };
 
-mod protocol;
 pub mod error;
+mod protocol;
 
-use protocol::{Color, Command, Response, write_response, parse_command};
 use error::{MyError, MyResult};
+use protocol::{parse_command, write_response, Color, Command, Response};
 
 const SIZE: Pos = (640, 480);
 const TIMEOUT: Duration = Duration::from_secs(1);
@@ -22,7 +22,9 @@ pub type Pos = (usize, usize);
 
 fn mix(x: u8, y: u8, a: u8) -> u8 {
     let a = (a as f32 / u8::max_value() as f32).min(1.).max(0.);
-    (x as f32 * (1. - a) + y as f32 * a).min(u8::max_value() as f32).max(0.) as u8
+    (x as f32 * (1. - a) + y as f32 * a)
+        .min(u8::max_value() as f32)
+        .max(0.) as u8
 }
 
 fn mix_in_place(x: &mut u32, y: u32) {
@@ -36,10 +38,10 @@ async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> M
     let mut read = BufReader::new(read);
     while let Ok(command) = timeout(TIMEOUT, parse_command(&mut read)).await {
         match command {
-            Ok(Command::Help) =>
-                write_response(&mut write, Response::Help).await?,
-            Ok(Command::Size) =>
-                write_response(&mut write, Response::Size((SIZE.0, SIZE.1))).await?,
+            Ok(Command::Help) => write_response(&mut write, Response::Help).await?,
+            Ok(Command::Size) => {
+                write_response(&mut write, Response::Size((SIZE.0, SIZE.1))).await?
+            }
             Ok(Command::GetPx((x, y))) => {
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(io::ErrorKind::InvalidInput.into());
@@ -71,7 +73,9 @@ async fn main() {
     let buffer2 = buffer.clone();
 
     task::spawn(async move {
-        let mut listener = TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), 5545)).await.unwrap();
+        let mut listener = TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), 5545))
+            .await
+            .unwrap();
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             eprintln!("Got connection");
@@ -86,12 +90,12 @@ async fn main() {
             }
         }
     });
-    
+
     // task::spawn_blocking(|| {
-        let mut window = Window::new("Pixel Flood", SIZE.0, SIZE.1, WindowOptions::default()).unwrap();
-        while window.is_open() {
-            let buffer = buffer.lock().await;
-            window.update_with_buffer(&buffer, SIZE.0, SIZE.1).unwrap();
-        }
+    let mut window = Window::new("Pixel Flood", SIZE.0, SIZE.1, WindowOptions::default()).unwrap();
+    while window.is_open() {
+        let buffer = buffer.lock().await;
+        window.update_with_buffer(&buffer, SIZE.0, SIZE.1).unwrap();
+    }
     // });
 }

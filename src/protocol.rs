@@ -1,6 +1,9 @@
+use crate::{
+    error::{MyError, MyResult, ParseColorError},
+    Pos,
+};
 use std::{fmt, io, marker::Unpin, str::FromStr};
-use tokio::io::{AsyncWriteExt, AsyncBufReadExt};
-use crate::{error::{MyError, MyResult, ParseColorError}, Pos};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 const HELP: &str = "Commands:
     - HELP - Show this message
@@ -51,7 +54,7 @@ pub enum Command {
 }
 
 pub enum Response {
-    Help, 
+    Help,
     Size(Pos),
     Px(Pos, Color),
 }
@@ -100,13 +103,19 @@ mod tests {
     #[test]
     fn test_px() {
         let tests = [
-            ("PX 1 2 112233", Some(((1usize, 2usize), Some(Color(0xff112233u32))))),
-            ("PX 1 2 11223344", Some(((1usize, 2usize), Some(Color(0x44112233u32))))),
+            (
+                "PX 1 2 112233",
+                Some(((1usize, 2usize), Some(Color(0xff112233u32)))),
+            ),
+            (
+                "PX 1 2 11223344",
+                Some(((1usize, 2usize), Some(Color(0x44112233u32)))),
+            ),
             ("PX 1 2", Some(((1usize, 2usize), None))),
             ("PX 1", None),
         ];
         for (msg, exp) in tests.iter() {
-            assert_eq!(&parse_px(msg), exp, "msg: {}",  msg);
+            assert_eq!(&parse_px(msg), exp, "msg: {}", msg);
         }
     }
 }
