@@ -93,8 +93,10 @@ fn parse_px(s: &str) -> Option<(Pos, Option<Color>)> {
     args.next().filter(|&arg| arg == "PX")?;
     let x = args.next()?.parse::<usize>().ok()?;
     let y = args.next()?.parse::<usize>().ok()?;
-    let color = args.next().and_then(|x| x.parse::<Color>().ok());
-    Some(((x, y), color))
+    match args.next() {
+        Some(color) => Some(((x, y), Some(color.parse().ok()?))),
+        None => Some(((x, y), None)),
+    }
 }
 
 #[cfg(test)]
@@ -112,6 +114,7 @@ mod tests {
                 Some(((1usize, 2usize), Some(Color(0x44112233u32)))),
             ),
             ("PX 1 2", Some(((1usize, 2usize), None))),
+            ("PX 1 2 00", None),
             ("PX 1", None),
         ];
         for (msg, exp) in tests.iter() {
