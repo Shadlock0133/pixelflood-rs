@@ -21,13 +21,14 @@ const TIMEOUT: Duration = Duration::from_secs(1);
 pub type Pos = (usize, usize);
 
 fn mix(x: u8, y: u8, a: u8) -> u8 {
-    x
+    let a = (a as f32 / u8::max_value() as f32).min(1.).max(0.);
+    (x as f32 * (1. - a) + y as f32 * a).min(u8::max_value() as f32).max(0.) as u8
 }
 
 fn mix_in_place(x: &mut u32, y: u32) {
-    let [a, r, g, b] = u32::to_be_bytes(y);
+    let [a, yr, yg, yb] = u32::to_be_bytes(y);
     let [_, xr, xg, xb] = u32::to_be_bytes(*x);
-    *x = u32::from_be_bytes([0, mix(r, xr, a), mix(g, xg, a), mix(b, xb, a)]);
+    *x = u32::from_be_bytes([0, mix(xr, yr, a), mix(xg, yg, a), mix(xb, yb, a)]);
 }
 
 async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> MyResult<()> {
@@ -50,7 +51,7 @@ async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> M
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(MyError::GetPxOutside((x, y)));
                 }
-                buffer.lock().await[y * SIZE.0 + x] = color;
+                mix_in_place(&mut buffer.lock().await[y * SIZE.0 + x], color);
             }
             Err(e) => eprintln!("Got error: {}", e),
         }

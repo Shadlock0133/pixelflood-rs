@@ -18,6 +18,7 @@ impl FromStr for Color {
         if s.len() == 6 {
             // rrggbb
             u32::from_str_radix(s, 16)
+                .map(|x| x | 0xff_00_00_00)
                 .map(Color)
                 .map_err(|_| ParseColorError::new(s))
         } else if s.len() == 8 {
@@ -37,11 +38,7 @@ impl FromStr for Color {
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0 >> 24 == 0 {
-            write!(f, "{:06x}", self.0)
-        } else {
-            write!(f, "{:08x}", self.0)
-        }
+        write!(f, "{:06x}", self.0 & 0x00_ff_ff_ff)
     }
 }
 
