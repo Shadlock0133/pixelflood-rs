@@ -1,10 +1,17 @@
 use minifb::{Window, WindowOptions};
-use std::{io, net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{
+    io, iter,
+    net::Ipv4Addr,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::{
     io::BufReader,
     net::{TcpListener, TcpStream},
     stream::StreamExt,
-    sync::Mutex,
     task,
     time::timeout,
 };
@@ -27,13 +34,14 @@ fn mix(x: u8, y: u8, a: u8) -> u8 {
         .max(0.) as u8
 }
 
-fn mix_in_place(x: &mut u32, y: u32) {
+fn mix_in_place(x: &AtomicU32, y: u32) {
     let [a, yr, yg, yb] = u32::to_be_bytes(y);
-    let [_, xr, xg, xb] = u32::to_be_bytes(*x);
-    *x = u32::from_be_bytes([0, mix(xr, yr, a), mix(xg, yg, a), mix(xb, yb, a)]);
+    let [_, xr, xg, xb] = u32::to_be_bytes(x.load(Ordering::Relaxed));
+    let mixed = u32::from_be_bytes([0, mix(xr, yr, a), mix(xg, yg, a), mix(xb, yb, a)]);
+    x.store(mixed, Ordering::Relaxed);
 }
 
-async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> MyResult<()> {
+async fn handle_client(mut stream: TcpStream, buffer: Arc<Vec<AtomicU32>>) -> MyResult<()> {
     let (read, mut write) = stream.split();
     let mut read = BufReader::new(read);
     while let Ok(command) = timeout(TIMEOUT, parse_command(&mut read)).await {
@@ -46,14 +54,14 @@ async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> M
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(io::ErrorKind::InvalidInput.into());
                 }
-                let color = buffer.lock().await[y * SIZE.0 + x];
+                let color = buffer[y * SIZE.0 + x].load(Ordering::Relaxed);
                 write_response(&mut write, Response::Px((x, y), Color(color))).await?;
             }
             Ok(Command::SetPx((x, y), Color(color))) => {
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(MyError::GetPxOutside((x, y)));
                 }
-                mix_in_place(&mut buffer.lock().await[y * SIZE.0 + x], color);
+                mix_in_place(&buffer[y * SIZE.0 + x], color);
             }
             Err(e) => eprintln!("Got error: {}", e),
         }
@@ -63,16 +71,18 @@ async fn handle_client(mut stream: TcpStream, buffer: Arc<Mutex<Vec<u32>>>) -> M
 
 #[tokio::main]
 async fn main() {
-    let mut buffer = vec![0u32; SIZE.0 * SIZE.1];
+    let buffer: Vec<AtomicU32> = iter::repeat_with(|| AtomicU32::new(0))
+        .take(SIZE.0 * SIZE.1)
+        .collect();
     for y in 0..SIZE.1 {
         for x in 0..SIZE.0 {
-            buffer[y * SIZE.0 + x] = (x | y << 6) as u32;
+            buffer[y * SIZE.0 + x].store((x ^ y << 6) as u32, Ordering::Relaxed);
         }
     }
-    let buffer = Arc::new(Mutex::new(buffer));
+    let buffer = Arc::new(buffer);
     let buffer2 = buffer.clone();
 
-    task::spawn(async move {
+    let listener = task::spawn(async move {
         let mut listener = TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), 5545))
             .await
             .unwrap();
@@ -91,11 +101,17 @@ async fn main() {
         }
     });
 
-    // task::spawn_blocking(|| {
-    let mut window = Window::new("Pixel Flood", SIZE.0, SIZE.1, WindowOptions::default()).unwrap();
-    while window.is_open() {
-        let buffer = buffer.lock().await;
-        window.update_with_buffer(&buffer, SIZE.0, SIZE.1).unwrap();
-    }
-    // });
+    let window = task::spawn_blocking(move || {
+        let mut window =
+            Window::new("Pixel Flood", SIZE.0, SIZE.1, WindowOptions::default()).unwrap();
+        let mut buffer_sync: Vec<u32>;
+        while window.is_open() {
+            buffer_sync = buffer.iter().map(|px| px.load(Ordering::Relaxed)).collect();
+            window
+                .update_with_buffer(&buffer_sync, SIZE.0, SIZE.1)
+                .unwrap();
+        }
+    });
+
+    futures::future::select(listener, window).await;
 }
