@@ -61,7 +61,7 @@ pub enum Response {
 
 pub async fn parse_command<B: Unpin + AsyncBufReadExt>(mut r: B) -> MyResult<Command> {
     let mut buf = String::new();
-    while buf.is_empty() {
+    while buf.trim().is_empty() {
         r.read_line(&mut buf).await?;
     }
     let line = buf.trim();
