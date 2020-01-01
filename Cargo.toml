@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 minifb = "0.15.1"
 tokio = { version = "0.2", features = ["blocking", "io-util", "macros", "rt-threaded", "stream", "sync", "tcp", "time"] }
-tokio-util = { version = "0.2.0", features = ["codec"] }
-bytes = "0.5.3"
 futures = "0.3.1"
 thiserror = "1.0.9"
+tracing = "0.1.11"
+tracing-subscriber = "0.1.6"

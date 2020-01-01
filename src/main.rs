@@ -15,6 +15,7 @@ use tokio::{
     task,
     time::timeout,
 };
+use tracing::{info, debug};
 
 pub mod error;
 mod protocol;
@@ -45,32 +46,35 @@ async fn handle_client(mut stream: TcpStream, buffer: Arc<Vec<AtomicU32>>) -> My
     let (read, mut write) = stream.split();
     let mut read = BufReader::new(read);
     while let Ok(command) = timeout(TIMEOUT, parse_command(&mut read)).await {
-        match command {
-            Ok(Command::Help) => write_response(&mut write, Response::Help).await?,
-            Ok(Command::Size) => {
-                write_response(&mut write, Response::Size((SIZE.0, SIZE.1))).await?
-            }
-            Ok(Command::GetPx((x, y))) => {
+        match command? {
+            Command::Help => write_response(&mut write, Response::Help).await?,
+            Command::Size => write_response(&mut write, Response::Size((SIZE.0, SIZE.1))).await?,
+            Command::GetPx((x, y)) => {
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(io::ErrorKind::InvalidInput.into());
                 }
                 let color = buffer[y * SIZE.0 + x].load(Ordering::Relaxed);
                 write_response(&mut write, Response::Px((x, y), Color(color))).await?;
             }
-            Ok(Command::SetPx((x, y), Color(color))) => {
+            Command::SetPx((x, y), Color(color)) => {
                 if x >= SIZE.0 || y >= SIZE.1 {
                     return Err(MyError::GetPxOutside((x, y)));
                 }
                 mix_in_place(&buffer[y * SIZE.0 + x], color);
             }
-            Err(e) => eprintln!("Got error: {}", e),
         }
     }
+    info!("Timed out");
     Ok(())
 }
 
 #[tokio::main]
 async fn main() {
+    match tracing_subscriber::fmt::try_init() {
+        Ok(()) => debug!("Logger initiated"),
+        Err(e) => eprintln!("Logger error: {}", e),
+    }
+
     let buffer: Vec<AtomicU32> = iter::repeat_with(|| AtomicU32::new(0))
         .take(SIZE.0 * SIZE.1)
         .collect();
@@ -88,13 +92,13 @@ async fn main() {
             .unwrap();
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
-            eprintln!("Got connection");
             if let Ok(stream) = stream {
+                debug!("Got connection from {:?}", stream.peer_addr());
                 let buffer2 = buffer2.clone();
                 task::spawn(async move {
                     match handle_client(stream, buffer2).await {
-                        Ok(()) => eprintln!("Connection ended"),
-                        Err(e) => eprintln!("Connection error: {}", e),
+                        Ok(()) => debug!("Connection ended"),
+                        Err(e) => info!("Connection error: {}", e),
                     }
                 });
             }
