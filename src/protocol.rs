@@ -9,7 +9,8 @@ const HELP: &str = "Commands:
     - HELP - Show this message
     - SIZE - Get canvas size
     - PX [x] [y] - Get color from canvas at this position
-    - PX [x] [y] [color] - Paint this color on canvas at this position";
+    - PX [x] [y] [color] - Paint this color on canvas at this position
+";
 
 // Stores pixel in ARGB format
 #[derive(Debug, PartialEq, Eq)]
